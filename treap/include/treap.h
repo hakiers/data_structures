@@ -42,10 +42,6 @@ class Treap{
         //lower/upper bound 
 };
 
-
-
-
-
 template<typename T>
 std::unique_ptr<Node<T>> join(std::unique_ptr<Node<T>> x, std::unique_ptr<Node<T>> y){
     if(!x) return y;

@@ -2,7 +2,9 @@
 #define BINOM_HEAP_H
 #include <memory>
 #include <vector>
-#include <iostream>
+#include <cstdint>
+#include <climits>
+#define EMPTY_HEAP ULLONG_MAX
 
 template<typename T>
 using Uptr = std::unique_ptr<T>;
@@ -12,10 +14,9 @@ class Binom_Heap{
     struct Node{
             T value;
             Uptr<Node> child;
-            Uptr<Node> neighbor;
-            size_t size; //power of two
+            Uptr<Node> sibling;
 
-            Node(T value) : value(value), size(0) {}
+            Node(T value) : value(value) {}
     };
 
     std::vector<Uptr<Node>> roots;
@@ -45,19 +46,18 @@ void Binom_Heap<T>::add(Uptr<Node> other_root, size_t pow){
     if(!other_root) return;
     if(roots.size() <= pow) roots.resize(pow<<1);
 
-    if(roots[pow] == nullptr){ 
+    if(!roots[pow]){ 
         roots[pow] = std::move(other_root);
-        roots[pow]->size = pow;
         return;
     }
     
     if(other_root->value < roots[pow]->value){
-        roots[pow]->neighbor = std::move(other_root->child);
+        roots[pow]->sibling = std::move(other_root->child);
         other_root->child = std::move(roots[pow]);
         add(std::move(other_root), pow+1);
     }
     else{
-        other_root->neighbor = std::move(roots[pow]->child);
+        other_root->sibling = std::move(roots[pow]->child);
         roots[pow]->child = std::move(other_root);
         add(std::move(roots[pow]), pow+1);
     }
@@ -65,10 +65,10 @@ void Binom_Heap<T>::add(Uptr<Node> other_root, size_t pow){
 
 template<typename T>
 size_t Binom_Heap<T>::find_min_pow() const{
-    size_t min_pow = SIZE_T_MAX;
+    size_t min_pow = EMPTY_HEAP;
     for(size_t pow = 0; pow < roots.size(); pow++){
         if(!roots[pow]) continue;
-        else if(roots[pow] && min_pow == SIZE_T_MAX) min_pow = pow;
+        else if(roots[pow] && min_pow == EMPTY_HEAP) min_pow = pow;
         else if(roots[pow]->value < roots[min_pow]->value) min_pow = pow;
     }
     return min_pow;
@@ -85,10 +85,12 @@ template<typename T>
 void Binom_Heap<T>::move(Binom_Heap& other){
     if(&other == this) return;
     for(size_t pow = 0; pow < other.roots.size(); pow++){
+        if(!other.roots[pow]) continue;
         add(std::move(other.roots[pow]), pow);
         size_ += (1<<pow);
     }
 
+    other.roots.clear();
     other.roots.resize(1);
     other.size_ = 0;
 }
@@ -98,26 +100,35 @@ size_t Binom_Heap<T>::size() const{
     return size_;
 }
 
-
 template<typename T>
 T Binom_Heap<T>::top() const{
-    return roots[find_min_pow()]->value;
+    size_t min_pow = find_min_pow();
+    if(min_pow == EMPTY_HEAP) 
+        throw std::runtime_error("Top from empty heap");
+    return roots[min_pow]->value;
 }
 
 template<typename T>
-T Binom_Heap<T>::pop(){
-    Uptr<Node> root_ = std::move(roots[find_min_pow()]);
-    
+T Binom_Heap<T>::pop() {
+    size_t min_pow = find_min_pow();
+    if(min_pow == EMPTY_HEAP) 
+        throw std::runtime_error("Pop from empty heap");
+
+    Uptr<Node> root_ = std::move(roots[min_pow]);
+    T result = root_->value;
+
     Uptr<Node> cur_ = std::move(root_->child);
+    size_ -= 1;
+    
+    size_t child_pow = min_pow;
     while(cur_){
-        Uptr<Node> next_ = std::move(cur_->neighbor);
-        size_t cur_size = cur_->size;
-        add(std::move(cur_), cur_size);
+        child_pow -= 1;
+        Uptr<Node> next_ = std::move(cur_->sibling);
+        add(std::move(cur_), child_pow);
         cur_ = std::move(next_);
     }
 
-    size_ -= 1;
-    return root_->value;
+    return result;
 }
 
 

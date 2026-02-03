@@ -21,12 +21,13 @@ class Binom_Heap{
 
     std::vector<Uptr<Node>> roots;
     size_t size_;
+    size_t min_root_pow_;
 
     void add(Uptr<Node>, size_t);
-    size_t find_min_pow() const;
+    void update_min_root_pow();
 
     public:
-        Binom_Heap() : size_(0) {roots.resize(1);}
+        Binom_Heap() : size_(0), min_root_pow_(EMPTY_HEAP) {roots.resize(1);}
         ~Binom_Heap() = default;
 
         Binom_Heap(const Binom_Heap&) = delete;
@@ -64,14 +65,16 @@ void Binom_Heap<T>::add(Uptr<Node> other_root, size_t pow){
 }
 
 template<typename T>
-size_t Binom_Heap<T>::find_min_pow() const{
-    size_t min_pow = EMPTY_HEAP;
-    for(size_t pow = 0; pow < roots.size(); pow++){
-        if(!roots[pow]) continue;
-        else if(roots[pow] && min_pow == EMPTY_HEAP) min_pow = pow;
-        else if(roots[pow]->value < roots[min_pow]->value) min_pow = pow;
+void Binom_Heap<T>::update_min_root_pow(){
+    min_root_pow_ = EMPTY_HEAP;
+    for(size_t pow = 0, mask = size_; mask > 0; pow++, mask >>= 1){
+        if(mask & 1){
+            if(min_root_pow_ == EMPTY_HEAP || 
+               roots[pow]->value < roots[min_root_pow_]->value){
+                min_root_pow_ = pow;
+            }
+        }
     }
-    return min_pow;
 }
 
 template<typename T>
@@ -79,6 +82,8 @@ void Binom_Heap<T>::insert(const T& val){
     Uptr<Node> root_ = std::make_unique<Node>(val);
     add(std::move(root_), 0);
     size_ += 1;
+    
+    update_min_root_pow();
 }
 
 template<typename T>
@@ -93,6 +98,9 @@ void Binom_Heap<T>::move(Binom_Heap& other){
     other.roots.clear();
     other.roots.resize(1);
     other.size_ = 0;
+    other.min_root_pow_ = EMPTY_HEAP;
+
+    update_min_root_pow();
 }
 
 template<typename T>
@@ -102,17 +110,14 @@ size_t Binom_Heap<T>::size() const{
 
 template<typename T>
 T Binom_Heap<T>::top() const{
-    size_t min_pow = find_min_pow();
-    if(min_pow == EMPTY_HEAP) 
-        throw std::runtime_error("Top from empty heap");
-    return roots[min_pow]->value;
+    if(size_ == 0) throw std::runtime_error("Top from empty heap");
+    return roots[min_root_pow_]->value;
 }
 
 template<typename T>
 T Binom_Heap<T>::pop() {
-    size_t min_pow = find_min_pow();
-    if(min_pow == EMPTY_HEAP) 
-        throw std::runtime_error("Pop from empty heap");
+    if(size_ == 0) throw std::runtime_error("Pop from empty heap");
+    size_t min_pow = min_root_pow_;
 
     Uptr<Node> root_ = std::move(roots[min_pow]);
     T result = root_->value;
@@ -128,9 +133,8 @@ T Binom_Heap<T>::pop() {
         cur_ = std::move(next_);
     }
 
+    update_min_root_pow();
     return result;
 }
-
-
 
 #endif
